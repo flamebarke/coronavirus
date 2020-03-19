@@ -5,7 +5,6 @@
 import requests
 import pandas as pd
 from bs4 import BeautifulSoup
-from io import StringIO
 from tabulate import tabulate
 
 url = 'https://www.worldometers.info/coronavirus/'
