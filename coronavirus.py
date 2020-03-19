@@ -3,6 +3,7 @@
 # Ref: https://srome.github.io/Parsing-HTML-Tables-in-Python-with-BeautifulSoup-and-pandas/
 
 import requests
+import datetime
 import pandas as pd
 from bs4 import BeautifulSoup
 from tabulate import tabulate
@@ -57,8 +58,14 @@ class HTMLTableParser:
                 pass
         
         return df
+    
+time = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M%Z")
+print("\n" + "Date/Time >: " + time)
+print("Counters are reset at 23:59UTC" + "\n")
 
 hp = HTMLTableParser()
 table = hp.parse_url(url)[0][1]
 print(tabulate(table, headers=["#","Country","Cases","+","Deaths","+",\
 "Recovered","Active","Critical","CPM"], tablefmt='psql'))
+
+#table.to_csv(time + '.csv')
