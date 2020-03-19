@@ -13,4 +13,6 @@ Python web scraper for https://www.worldometers.info/coronavirus/
 
 `python3 ./coronavirus.py`
 
+use the `-e` flag to export the data to a time-stamped csv file (YYYY-MM-DD HH/MMUTC.csv)
+
 ![Output](https://github.com/flamebarke/coronavirus/blob/master/screen_shot.png)
