@@ -2,6 +2,8 @@
 
 # Ref: https://srome.github.io/Parsing-HTML-Tables-in-Python-with-BeautifulSoup-and-pandas/
 
+import sys
+from sys import argv
 import requests
 import datetime
 import pandas as pd
@@ -68,4 +70,7 @@ table = hp.parse_url(url)[0][1]
 print(tabulate(table, headers=["#","Country","Cases","+","Deaths","+",\
 "Recovered","Active","Critical","CPM"], tablefmt='psql'))
 
-#table.to_csv(time + '.csv')
+if len(sys.argv) == 2:
+    table.to_csv(time + '.csv')
+else:
+    exit
