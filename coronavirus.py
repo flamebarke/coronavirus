@@ -68,7 +68,7 @@ print("Counters are reset at 23:59UTC" + "\n")
 hp = HTMLTableParser()
 table = hp.parse_url(url)[0][1]
 print(tabulate(table, headers=["#","Country","Cases","+","Deaths","+",\
-"Recovered","Active","Critical","CPM"], tablefmt='psql'))
+"Recovered","Active","Critical","CPM","DPM"], tablefmt='psql'))
 
 if len(sys.argv) == 2:
     table.to_csv(time + '.csv')
