@@ -2,13 +2,14 @@
 
 # Ref: https://srome.github.io/Parsing-HTML-Tables-in-Python-with-BeautifulSoup-and-pandas/
 
-import sys
-from sys import argv
-import requests
+from __future__ import absolute_import, division
+
+from   bs4                      import BeautifulSoup
 import datetime
 import pandas as pd
-from bs4 import BeautifulSoup
-from tabulate import tabulate
+import requests
+import sys
+from   tabulate                 import tabulate
 
 url = 'https://www.worldometers.info/coronavirus/'
 
