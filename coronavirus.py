@@ -91,7 +91,9 @@ def display_stats(export=False):
                    tablefmt='psql'))
 
     if export:
-        table.to_csv(time + '.csv')
+        export_file_name = f'{time}.csv'
+        table.to_csv(export_file_name)
+        print(f"Exported data to file: {export_file_name}")
 
 
 if __name__ == "__main__":
