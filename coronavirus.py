@@ -2,75 +2,150 @@
 
 # Ref: https://srome.github.io/Parsing-HTML-Tables-in-Python-with-BeautifulSoup-and-pandas/
 
-import sys
-from sys import argv
-import requests
+from __future__ import absolute_import, division
+
+import argparse
 import datetime
+import sys
+
+from bs4 import BeautifulSoup, NavigableString
 import pandas as pd
-from bs4 import BeautifulSoup
+import requests
 from tabulate import tabulate
 
-url = 'https://www.worldometers.info/coronavirus/'
+URL = 'https://www.worldometers.info/coronavirus/'
+TABLE_COLUMNS = ["Country", "Cases", "NCases", "Deaths",
+                 "NDeaths", "Recovered", "Active", "Critical",
+                 "CPM", "DPM", "Tests", "TPM"]
+
 
 class HTMLTableParser:
 
     def parse_url(self, url):
         response = requests.get(url)
         soup = BeautifulSoup(response.text, 'lxml')
-        return [(table['id'],self.parse_html_table(table))\
-            for table in soup.find_all('table')]
+        return [(table['id'], self.parse_html_table(table))
+                for table in soup.find_all('table')]
 
     def parse_html_table(self, table):
-        n_columns = 0
-        n_rows = 0
+
         column_names = []
 
-        for row in table.find_all('tr'):
-            td_tags = row.find_all('td')
-            if len(td_tags) > 0:
-                n_rows += 1
-                if n_columns == 0:
-                    n_columns = len(td_tags)
-        
-        th_tags = row.find_all('th')
-        if len(th_tags) > 0 and len(column_names) == 0:
-            for th in th_tags:
-                column_names.append(th.get_text())
-        
-        if len(column_names) > 0 and len(column_names) != n_columns:
-            raise Exception("Column titles do not match the number of columns")
+        # get <thead> and extract column names from it
+        thead = table.find_all('thead')[0]
+        th_tags = thead.find_all('th')
 
-        columns = column_names if len(column_names) > 0 else range(0,n_columns)
-        df = pd.DataFrame(columns = columns,
-                    index = range(0,n_rows))
-        row_marker = 0
-        for row in table.find_all('tr'):
-            column_marker = 0
-            columns = row.find_all('td')
-            for column in columns:
-                df.iat[row_marker,column_marker] = column.get_text()
-                column_marker += 1
-            if len(columns) > 0:
-                row_marker += 1
+        for th in th_tags:
+            col_name = []
+            for item in th.contents:
+                if isinstance(item, NavigableString):
+                    col_name.append(item.strip(',+').strip())
+                elif item.get_text().strip():
+                    col_name.append(item.get_text().strip())
+            column_names.append(' '.join(col_name))
 
-        for col in df:
-            try:
-                df[col] = df[col].astype(float)
-            except ValueError:
-                pass
-        
-        return df
-    
-time = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M%Z")
-print("\n" + "Date/Time >: " + time)
-print("Counters are reset at 23:59UTC" + "\n")
+        # get the first <tbody> and extract data
+        tbody = table.find_all('tbody')[0]
+        # list of lists from tr/td elements
+        data = [
+            [td.get_text().strip().replace(',', '').strip('+')
+             for td in row.find_all('td')]
+            for row in tbody.find_all('tr')]
 
-hp = HTMLTableParser()
-table = hp.parse_url(url)[0][1]
-print(tabulate(table, headers=["#","Country","Cases","+","Deaths","+",\
-"Recovered","Active","Critical","CPM","DPM","Tests","TPM"], tablefmt='psql'))
+        df = pd.DataFrame(data, columns=column_names)
 
-if len(sys.argv) == 2:
-    table.to_csv(time + '.csv')
-else:
-    exit
+        sorting_allowed = True
+        # though we get column names from worldometers, we would like
+        # our own compact names to help with display, sorting etc
+        if len(df.columns) == len(TABLE_COLUMNS):
+            df.columns = TABLE_COLUMNS
+        else:
+            print("WARNING: Number of columns is not as expected, sorting will not work.")
+            sorting_allowed = False
+        # replace empty strings with 0 in all columns
+        # (does not impact the 'Country' column as it has data)
+        for col in df.columns:
+            df[col] = df[col].replace('', 0)
+
+        if sorting_allowed:
+
+            # convert a few columns to 'int'
+            for col in ["Cases", "NCases", "Deaths",
+                        "NDeaths", "Recovered", "Active",
+                        "Critical", "Tests"]:
+                try:
+                    df[col] = df[col].astype(int)
+                except ValueError as ve:
+                    print(f"int(col) gave value error for {col}, {ve}")
+
+            # convert a few columns to 'float'
+            for col in ["CPM", "DPM", "TPM"]:
+                try:
+                    df[col] = df[col].astype(float)
+                except ValueError as ve:
+                    print(f"float(col) gave value error for {col}, {ve}")
+
+        return df, sorting_allowed
+
+
+def get_worldometer_stats():
+    """
+    Returns a pandas DataFrame with worldometers coronovirus stats.
+    """
+
+    hp = HTMLTableParser()
+    data = hp.parse_url(URL)[0][1]
+    return data
+
+
+def display_stats(table):
+    print(tabulate(table, headers=["#"] + list(table.columns),
+                   tablefmt='psql'))
+
+
+def export_stats_to_csv(table, timestamp):
+    export_file_name = f'{timestamp}.csv'
+    table.to_csv(export_file_name)
+    print(f"Exported data to file: {export_file_name}")
+
+
+def main():
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--export", "-e", help="export data to a CSV file", action="store_true")
+    parser.add_argument("--sort_col", "-s",
+                        action="store",
+                        choices=TABLE_COLUMNS,
+                        type=lambda arg: {x.lower(): x for x in TABLE_COLUMNS}[
+                            arg.lower()],
+                        default="Cases",
+                        help="sort data by given column in descending order")
+    parser.add_argument("--asc", "-a", action="store_true",
+                        help="change sort order to ascending")
+    args = parser.parse_args()
+
+    # fetch data from worldometers
+    table, sorting_allowed = get_worldometer_stats()
+    # ['table.loc['Total']= table.sum()
+
+    timestamp = datetime.datetime.now(
+        datetime.timezone.utc).strftime("%Y-%m-%d %H:%M%Z")
+    print("\n" + "Date/Time >: " + timestamp)
+    print("Counters are reset at 23:59UTC" + "\n")
+
+    sort_col = args.sort_col if sorting_allowed else 'None'
+    # perform sorting if needed
+    if sort_col != "None":
+        table = table.sort_values(sort_col, ascending=args.asc)
+
+    # display data table on the screen
+    display_stats(table)
+
+    if args.export:
+        # export data to csv
+        export_stats_to_csv(table, timestamp)
+
+
+if __name__ == "__main__":
+    main()
