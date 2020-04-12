@@ -6,17 +6,29 @@ from __future__ import absolute_import, division
 
 import argparse
 import datetime
-import sys
 
-from bs4 import BeautifulSoup, NavigableString
+from bs4 import BeautifulSoup
 import pandas as pd
 import requests
 from tabulate import tabulate
 
 URL = 'https://www.worldometers.info/coronavirus/'
-TABLE_COLUMNS = ["Country", "Cases", "NCases", "Deaths",
-                 "NDeaths", "Recovered", "Active", "Critical",
-                 "CPM", "DPM", "Tests", "TPM"]
+
+TABLE_COLUMNS = {
+    'CountryOther': 'Country',
+    'TotalCases': 'Cases',
+    'NewCases': 'NCases',
+    'TotalDeaths': 'Deaths',
+    'NewDeaths': 'NDeaths',
+    'TotalRecovered': 'Recovered',
+    'ActiveCases': 'Active',
+    'SeriousCritical': 'Critical',
+    'TotCases/1Mpop': 'CPM',
+    'Deaths/1Mpop': 'DPM',
+    'TotalTests': 'Tests',
+    'Tests/1Mpop': 'TPM',
+    'Continent': 'Continent'
+}
 
 
 class HTMLTableParser:
@@ -27,6 +39,18 @@ class HTMLTableParser:
         return [(table['id'], self.parse_html_table(table))
                 for table in soup.find_all('table')]
 
+    def get_friendly_column_names(self, col_names):
+        unknown = []
+        f_col_names = []
+        for col in col_names:
+            if col in TABLE_COLUMNS:
+                name = TABLE_COLUMNS[col]
+            else:
+                name = col
+                unknown.append(col)
+            f_col_names.append(name)
+        return f_col_names, unknown
+
     def parse_html_table(self, table):
 
         column_names = []
@@ -34,58 +58,61 @@ class HTMLTableParser:
         # get <thead> and extract column names from it
         thead = table.find_all('thead')[0]
         th_tags = thead.find_all('th')
+        column_names = [
+            th.get_text().replace(' ', '').replace('\n', '')
+            .replace('\xa0', '').replace(',', '') for th in th_tags]
 
-        for th in th_tags:
-            col_name = []
-            for item in th.contents:
-                if isinstance(item, NavigableString):
-                    col_name.append(item.strip(',+').strip())
-                elif item.get_text().strip():
-                    col_name.append(item.get_text().strip())
-            column_names.append(' '.join(col_name))
+        # though we get column names from worldometers, we would like
+        # our own compact names to help with display, sorting etc
+        friendly_column_names, unknown_cols = self.get_friendly_column_names(
+            column_names)
 
-        # get the first <tbody> and extract data
+        # get the first <tbody> to extract data
         tbody = table.find_all('tbody')[0]
+
         # list of lists from tr/td elements
         data = [
             [td.get_text().strip().replace(',', '').strip('+')
              for td in row.find_all('td')]
             for row in tbody.find_all('tr')]
 
-        df = pd.DataFrame(data, columns=column_names)
+        # use friendly column names when creating DataFrame
+        df = pd.DataFrame(data, columns=friendly_column_names)
 
-        sorting_allowed = True
-        # though we get column names from worldometers, we would like
-        # our own compact names to help with display, sorting etc
-        if len(df.columns) == len(TABLE_COLUMNS):
-            df.columns = TABLE_COLUMNS
-        else:
-            print("WARNING: Number of columns is not as expected, sorting will not work.")
-            sorting_allowed = False
-        # replace empty strings with 0 in all columns
-        # (does not impact the 'Country' column as it has data)
-        for col in df.columns:
+        if unknown_cols:
+            print(
+                f"WARNiNG: Unexpected column names from worldometers data \
+                    ({unknown_cols}). Please raise an issue on github.")
+
+        # convert a few columns to 'int'
+        for col in ["Cases", "NCases", "Deaths",
+                    "NDeaths", "Recovered", "Active",
+                    "Critical", "Tests"]:
             df[col] = df[col].replace('', 0)
+            try:
+                df[col] = df[col].astype(int)
+            except ValueError as ve:
+                print(f"int(col) gave value error for {col}, {ve}")
 
-        if sorting_allowed:
+        # convert a few columns to 'float'
+        for col in ["CPM", "DPM", "TPM"]:
+            df[col] = df[col].replace('', 0)
+            try:
+                df[col] = df[col].astype(float)
+            except ValueError as ve:
+                print(f"float(col) gave value error for {col}, {ve}")
 
-            # convert a few columns to 'int'
-            for col in ["Cases", "NCases", "Deaths",
-                        "NDeaths", "Recovered", "Active",
-                        "Critical", "Tests"]:
-                try:
-                    df[col] = df[col].astype(int)
-                except ValueError as ve:
-                    print(f"int(col) gave value error for {col}, {ve}")
+        try:
+            df['Country'] = df['Country'].replace('', 'Non-Country')
+        except KeyError:
+            pass  # do nothing
 
-            # convert a few columns to 'float'
-            for col in ["CPM", "DPM", "TPM"]:
-                try:
-                    df[col] = df[col].astype(float)
-                except ValueError as ve:
-                    print(f"float(col) gave value error for {col}, {ve}")
+        try:
+            df['Continent'] = df['Continent'].replace('', 'Non-Continent')
+        except KeyError:
+            pass  # do nothing
 
-        return df, sorting_allowed
+        return df
 
 
 def get_worldometer_stats():
@@ -112,32 +139,33 @@ def export_stats_to_csv(table, timestamp):
 def main():
 
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--export", "-e", help="export data to a CSV file", action="store_true")
+    parser.add_argument("--export", "-e",
+                        help="export data to a CSV file",
+                        action="store_true")
     parser.add_argument("--sort_col", "-s",
-                        action="store",
-                        choices=TABLE_COLUMNS,
-                        type=lambda arg: {x.lower(): x for x in TABLE_COLUMNS}[
-                            arg.lower()],
                         default="Cases",
-                        help="sort data by given column in descending order")
+                        help="Sort data by given column in descending order. \
+                        Defaults to 'Cases'. Pass 'None' to skip sorting.")
     parser.add_argument("--asc", "-a", action="store_true",
                         help="change sort order to ascending")
     args = parser.parse_args()
 
     # fetch data from worldometers
-    table, sorting_allowed = get_worldometer_stats()
-    # ['table.loc['Total']= table.sum()
+    table = get_worldometer_stats()
 
     timestamp = datetime.datetime.now(
         datetime.timezone.utc).strftime("%Y-%m-%d %H:%M%Z")
     print("\n" + "Date/Time >: " + timestamp)
     print("Counters are reset at 23:59UTC" + "\n")
 
-    sort_col = args.sort_col if sorting_allowed else 'None'
     # perform sorting if needed
-    if sort_col != "None":
-        table = table.sort_values(sort_col, ascending=args.asc)
+    if args.sort_col != "None":
+        if args.sort_col in table.columns:
+            table = table.sort_values(args.sort_col, ascending=args.asc)
+        else:
+            print(
+                f"ERROR: provided column name '{args.sort_col}' is invalid. \
+                    Use a valid column name for sorting.")
 
     # display data table on the screen
     display_stats(table)
