@@ -89,6 +89,8 @@ class HTMLTableParser:
                     "NDeaths", "Recovered", "Active",
                     "Critical", "Tests"]:
             df[col] = df[col].replace('', 0)
+            df[col] = df[col].replace("N/A", 0)
+
             try:
                 df[col] = df[col].astype(int)
             except ValueError as ve:
