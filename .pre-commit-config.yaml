@@ -1,0 +1,37 @@
+# See https://pre-commit.com for more information
+# See https://pre-commit.com/hooks.html for more hooks
+repos:
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v2.4.0
+    hooks:
+    -   id: trailing-whitespace
+    -   id: end-of-file-fixer
+    -   id: check-yaml
+    -   id: check-added-large-files
+
+-   repo: https://github.com/psf/black
+    rev: stable
+    hooks:
+    -   id: black
+        args: ['-l', '80']
+
+-   repo: https://github.com/asottile/pyupgrade
+    rev: v2.4.1
+    hooks:
+    -   id: pyupgrade
+
+- repo: https://gitlab.com/pycqa/flake8
+  rev: 3.7.9
+  hooks:
+  -     id: flake8
+        additional_dependencies: [flake8-bugbear, flake8-comprehensions,
+        flake8-debugger, flake8-broken-line, flake8-builtins]
+
+
+# -   repo: local
+#     hooks:
+#     -   id: pylint
+#         name: pylint
+#         entry: pylint
+#         language: system
+#         types: [python]

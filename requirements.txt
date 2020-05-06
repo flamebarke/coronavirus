@@ -13,3 +13,4 @@ six==1.14.0
 soupsieve==2.0
 tabulate==0.8.6
 urllib3==1.25.8
+pre-commit==2.3.0

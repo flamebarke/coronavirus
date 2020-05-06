@@ -1,5 +1,5 @@
 # coronavirus
-Python web scraper for https://www.worldometers.info/coronavirus/ 
+Python web scraper for https://www.worldometers.info/coronavirus/
 
 #### Installation:
 
@@ -9,7 +9,7 @@ Python web scraper for https://www.worldometers.info/coronavirus/
 
 `pip3 install -r requirements.txt`
 
-#### Usage: 
+#### Usage:
 
 `python3 ./coronavirus.py`
 
